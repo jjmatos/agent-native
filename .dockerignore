@@ -1,1 +1,8 @@
-
+node_modules
+    .git
+    .github
+    .cache
+    .output
+    dist
+    data/pglite
+    *.log
