@@ -1,21 +1,19 @@
-# Usa la imagen oficial de Bun para ARM64
 FROM oven/bun:1.2-alpine AS base
 WORKDIR /app
 
-# Copia solo archivos de dependencias
-COPY package.json bun.lockb* pnpm-lock.yaml* ./
+# Copiar solo el package.json (y bun.lockb si existe) ignorando pnpm-lock.yaml
+COPY package.json bun.lockb* ./
 
-# Instala dependencias con Bun (rápido y sin compilar C++)
-RUN bun install --production
+# Instalar dependencias con Bun omitiendo lockfiles externos
+RUN bun install --no-save
 
-# Copia el código fuente de la aplicación
+# Copiar todo el código fuente
 COPY . .
 
-# Variables de entorno por defecto
 ENV NODE_ENV=production
 ENV PORT=3000
 
 EXPOSE 3000
 
-# Punto de entrada directo del servidor
+# Arrancar la aplicación directamente con Bun
 CMD ["bun", "run", "src/index.ts"]
