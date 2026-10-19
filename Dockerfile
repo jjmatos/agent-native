@@ -5,54 +5,57 @@ FROM node:24-bookworm-slim AS builder
 
 WORKDIR /app
 
-# Dependencias del sistema para módulos nativos
+# Instalar dependencias del sistema necesarias para módulos nativos C/C++ en Linux ARM64
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3 make g++ git ca-certificates \
+    python3 \
+    make \
+    g++ \
+    git \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
+# Instalar pnpm en la versión requerida por el monorepo
 RUN npm install -g pnpm@10
 
-# Copiar manifiestos e instalar con lockfile congelado
-COPY pnpm-lock.yaml pnpm-workspace.yaml package.json .npmrc ./
-COPY packages ./packages
-COPY templates ./templates
-# (Ajusta los COPY según tu estructura real; la idea es copiar lo necesario antes del build)
+# Copiar el código fuente completo del repositorio
+COPY . .
 
-RUN pnpm install --frozen-lockfile
+# Solución al fallo de recap-cli: asegura la existencia de la ruta .github/workflows
+RUN mkdir -p .github/workflows && touch .github/workflows/pr-visual-recap.yml
 
-# Compilar la app Chat
+# Instalar dependencias del workspace y preconstruir paquetes
+RUN pnpm install --frozen-lockfile=false
+
+# Compilar la aplicación Chat (SSR React Router v8 + Servidor Nitro)
 WORKDIR /app/templates/chat
 RUN pnpm run build
-
-# Crear un paquete de producción aislado solo con dependencias de producción
-# Requiere "inject-workspace-packages=true" en .npmrc
-WORKDIR /app
-RUN pnpm --filter @agent-native/chat --prod deploy /out
 
 # =========================================================================
 # Etapa 2: Runner (Entorno de producción ligero)
 # =========================================================================
 FROM node:24-bookworm-slim AS runner
 
-WORKDIR /app
+WORKDIR /app/templates/chat
 
-# Solo curl para healthchecks
-RUN apt-get update && apt-get install -y --no-install-recommends curl \
+# Herramientas mínimas para healthchecks de Coolify
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
+# Variables de entorno de ejecución
 ENV NODE_ENV=production
 ENV PORT=3000
 ENV HOST=0.0.0.0
 ENV NITRO_HOST=0.0.0.0
 ENV NITRO_PORT=3000
 
-# Copiar SOLO el paquete de producción (node_modules aislado + código de la app)
-COPY --from=builder /out ./
-
-# Copiar la salida compilada de Nitro desde el builder
-# (pnpm deploy copia el código fuente, pero Nitro genera .output en la etapa de build)
-COPY --from=builder /app/templates/chat/.output ./.output
+# Copiar el monorepo ya compilado
+COPY --from=builder /app /app
 
 EXPOSE 3000
-VOLUME ["/app/data"]
+
+# Volumen persistente para la base de datos PGlite embebida
+VOLUME ["/app/templates/chat/data"]
+
+# Arrancar el servidor Nitro de producción
 CMD ["node", ".output/server/index.mjs"]
