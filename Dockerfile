@@ -2,19 +2,24 @@
 FROM node:22-alpine AS builder
 WORKDIR /app
 
-# Copiar archivos de dependencias
-COPY package*.json pnpm-lock.yaml* yarn.lock* ./
+# Habilitar Corepack para usar pnpm de forma nativa
+RUN corepack enable && corepack prepare pnpm@latest --activate
 
-# Instalar TODAS las dependencias (incluyendo devDependencies)
-RUN npm install
+# Copiar archivos de configuración de dependencias y workspace
+COPY package*.json pnpm-lock.yaml* pnpm-workspace.yaml* ./
 
-# Copiar el código fuente y construir la aplicación
+# Instalar todas las dependencias con pnpm
+RUN pnpm install --frozen-lockfile || pnpm install
+
+# Copiar el resto del código y construir la app
 COPY . .
-RUN npm run build || true
+RUN pnpm build || true
 
 # Etapa 2: Producción
 FROM node:22-alpine AS runner
 WORKDIR /app
+
+RUN corepack enable && corepack prepare pnpm@latest --activate
 
 ENV NODE_ENV=production
 ENV PORT=3000
@@ -25,4 +30,4 @@ COPY --from=builder /app/dist ./dist 2>/dev/null || COPY --from=builder /app/.ne
 
 EXPOSE 3000
 
-CMD ["npm", "start"]
+CMD ["pnpm", "start"]
