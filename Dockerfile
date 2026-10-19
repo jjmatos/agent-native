@@ -1,10 +1,10 @@
 FROM oven/bun:1.2-alpine AS base
 WORKDIR /app
 
-# Copiar solo el package.json (y bun.lockb si existe) ignorando pnpm-lock.yaml
-COPY package.json bun.lockb* ./
+# Copiar package.json y el archivo de espacio de trabajo que define el "catalog:"
+COPY package.json bun.lockb* pnpm-workspace.yaml* ./
 
-# Instalar dependencias con Bun omitiendo lockfiles externos
+# Instalar dependencias permitiendo que Bun resuelva la sintaxis "catalog:"
 RUN bun install --no-save
 
 # Copiar todo el código fuente
